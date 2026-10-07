@@ -1,0 +1,36 @@
+RECIBOS DEL TALLER - APP SIN INTERNET
+==============================================
+
+QUÉ ES
+Es el mismo recibo interactivo, pero funciona en el celular sin internet.
+Los recibos se guardan SOLO en ese celular. No se conectan con la versión de Claude.
+
+CÓMO PONERLA EN INTERNET (GitHub Pages, gratis, ~15 minutos, desde una computadora)
+1. Crea una cuenta en https://github.com
+2. Toca "+" (arriba a la derecha) > "New repository".
+   Nombre: recibos-qp   ·   Marca "Public"   ·   "Create repository".
+3. En la página del repositorio toca "uploading an existing file".
+   Arrastra TODOS los archivos de esta carpeta (index.html, sw.js, manifest.webmanifest,
+   jspdf.umd.min.js, icon-192.png, icon-512.png). Toca "Commit changes".
+4. Ve a Settings > Pages. En "Branch" escoge "main" y "/ (root)" > Save.
+5. Espera 1-2 minutos. La dirección queda así:
+   https://TU-USUARIO.github.io/recibos-qp/
+
+CÓMO INSTALARLA EN EL CELULAR (Android con Chrome)
+1. Con internet, abre la dirección en Chrome.
+2. Menú de los tres puntos > "Agregar a la pantalla principal" o "Instalar app".
+3. Ábrela una vez desde el ícono con internet. Desde ahí funciona sin señal.
+4. CONFIGURAR EL TALLER (una sola vez por celular): toca Ajustes > "Restaurar respaldo"
+   y escoge el archivo configuracion-taller-PRIVADO.json. Aparecen el logo, el teléfono,
+   la dirección y el texto legal.
+   Ese archivo NO se sube a GitHub. Pásalo por WhatsApp o correo privado.
+
+IMPORTANTE
+- Respaldo: Ajustes > "Bajar respaldo" cada semana. Guarda ese archivo fuera del celular
+  (Google Drive o correo). Si el celular se pierde, se daña o se borran los datos de Chrome
+  sin respaldo, los recibos se pierden.
+- No borres los datos de Chrome ni desinstales la app sin bajar respaldo antes.
+- Para pasar los recibos a otro celular: "Bajar respaldo" en uno, "Restaurar respaldo" en el otro.
+- El repositorio es público, pero no tiene ningún dato del taller ni de clientes: quien lo abra
+  ve un formulario genérico vacío. Los datos del taller y los recibos viven solo en el celular.
+- La página tiene una marca para que Google no la ponga en sus resultados.
