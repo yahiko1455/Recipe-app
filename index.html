@@ -117,6 +117,7 @@ table.costs{border-collapse:collapse;width:100%;table-layout:fixed;align-self:st
 .costs tr.tot td{font-weight:800}
 .costs input{min-width:0;border:0;background:transparent;color:var(--pen);font-family:var(--f-form);font-size:15.5px;text-align:right;width:100%;padding:4px 7px;outline:none;font-variant-numeric:tabular-nums}
 .costs input:focus{background:var(--pen-soft)}
+.costs input.bad,.costs output.bad{background:#fde3d8;color:#a0320a}
 .costs output{display:block;text-align:right;padding:4px 7px;color:var(--pen);font-size:15.5px;font-variant-numeric:tabular-nums}
 .costs tr.tot output{font-weight:800;font-size:17px}
 .taxrow{display:flex;align-items:center}
@@ -252,7 +253,17 @@ const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d
 const nowTime = () => { const d = new Date(); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 const fmtDate = s => { if (!s) return ''; const [y,m,d] = s.split('-'); return `${+m}-${+d}-${y.slice(2)}`; };
 const fmtTime = s => { if (!s) return ''; let [h, m] = s.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${pad(m)} ${ap}`; };
-const num = s => { const v = parseFloat(String(s ?? '').replace(/[^0-9.\-]/g, '')); return isFinite(v) ? v : 0; };
+function parseMoney(s){
+  let t = String(s ?? '').trim().replace(/^\$\s*/, '').replace(/\s+/g, '');
+  if (!t) return {v: 0, ok: true};
+  if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(t)) t = t.replace(/,/g, '');          // 1,261.33
+  else if (/^\d+,\d{1,2}$/.test(t)) t = t.replace(',', '.');                         // 1261,33
+  if (!/^\d+(\.\d{1,2})?$/.test(t) && !/^\.\d{1,2}$/.test(t)) return {v: 0, ok: false};
+  return {v: parseFloat(t), ok: true};
+}
+const num = s => parseMoney(s).v;
+const badMoney = r => [...CATS.map(k => r.cargos[k]), r.tax].some(x => !parseMoney(x).ok);
+const calcTax = r => { const sub = CATS.reduce((a, k) => a + num(r.cargos[k]), 0); return sub ? (Math.round(sub * SHOP.ivu) / 100).toFixed(2) : ''; };
 const fmtN = n => n ? n.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '';
 const nOT = n => String(n || 0).padStart(4, '0');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -413,10 +424,16 @@ function renderCosts(){
   const t = totals(cur);
   $('#costBody').innerHTML = CATS.map((k, i) => `<tr class="${i === 0 ? 'first' : ''}"><td class="l">${i === 0 ? 'PIEZAS' : esc(k)}</td><td><input data-cargo="${esc(k)}" inputmode="decimal" aria-label="${esc(k)}" value="${esc(cur.cargos[k] || '')}"></td></tr>`).join('') +
     `<tr><td class="l">Sub-Total</td><td><output id="oSub">${fmtN(t.sub)}</output></td></tr>
-     <tr><td class="l"><span class="taxrow">Tax<button data-act="ivu" title="Calcular IVU ${SHOP.ivu}% del sub-total">${SHOP.ivu}%</button></span></td><td><input data-k="tax" inputmode="decimal" aria-label="Tax" value="${esc(cur.tax || '')}"></td></tr>
+     <tr><td class="l"><span class="taxrow">Tax<button data-act="ivu" title="Calcular IVU ${SHOP.ivu}% del sub-total">${cur.taxAuto ? 'Quitar' : SHOP.ivu + '%'}</button></span></td><td><input data-k="tax" inputmode="decimal" aria-label="Tax" value="${esc(cur.tax || '')}"></td></tr>
      <tr class="tot"><td class="l">Total</td><td><output id="oTot">${fmtN(t.total)}</output></td></tr>`;
 }
-function updateTotals(){ const t = totals(cur); $('#oSub').textContent = fmtN(t.sub); $('#oTot').textContent = fmtN(t.total); }
+function updateTotals(){
+  if (cur.taxAuto){ cur.tax = calcTax(cur); const el = document.querySelector('[data-k="tax"]'); if (el && document.activeElement !== el) el.value = cur.tax ? fmtN(num(cur.tax)) : ''; }
+  const t = totals(cur), bad = badMoney(cur);
+  document.querySelectorAll('.costs input').forEach(el => el.classList.toggle('bad', !parseMoney(el.value).ok));
+  $('#oSub').textContent = bad ? 'Revisar' : fmtN(t.sub); $('#oTot').textContent = bad ? 'Revisar' : fmtN(t.total);
+  $('#oTot').classList.toggle('bad', bad); $('#oSub').classList.toggle('bad', bad);
+}
 function renderChecks(){
   $('#svcList').innerHTML = SERVICIOS.map(s => `<label class="ck"><input type="checkbox" data-svc="${esc(s)}" ${cur.servicios.includes(s) ? 'checked' : ''}>${esc(s)}</label>`).join('');
   $('#condList').innerHTML = CONDS.map(s => `<label class="ck"><input type="checkbox" data-one="condicion" value="${esc(s)}" ${cur.condicion === s ? 'checked' : ''}>${esc(s)}</label>`).join('');
@@ -476,6 +493,7 @@ function trimmedSig(){
 
 /* ---------- save / open ---------- */
 async function guardar(){
+  if (badMoney(cur)){ toast('Hay un precio en rojo que no se entiende. Corrígelo antes de guardar.'); return false; }
   if (!db){ toast('No se pudo abrir el almacenamiento de este celular.'); return false; }
   if (!String(cur.nombre).trim()){ toast('Escribe el nombre del cliente antes de guardar.'); document.querySelector('[data-k="nombre"]').focus(); return false; }
   const dup = Object.entries(saved).find(([id, r]) => id !== cur.id && num(r.numero) === num(cur.numero) && (r.tipo || 'recibo') === cur.tipo);
@@ -515,6 +533,7 @@ async function svgToPng(svg){
   return cv.toDataURL('image/jpeg', 0.9);
 }
 async function makePDF(r){
+  if (badMoney(r)) throw {code: 'hay un precio en rojo'};
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit: 'pt', format: 'letter'});
   const W = 612, H = 792, L = 30, R = 582, BLACK = [24, 24, 24], GRAY = [70, 74, 80], BLUE = [22, 48, 140];
@@ -603,6 +622,7 @@ function pdfName(){
   return `${ini}-${cur.tipo === 'cotizacion' ? 'Cotizacion' : 'Recibo'}-${nOT(cur.numero)}${cur.nombre ? '-' + slug(cur.nombre) : ''}.pdf`;
 }
 async function bajarPDF(){
+  if (badMoney(cur)){ toast('Hay un precio en rojo que no se entiende. Corrígelo antes del PDF.'); return; }
   if (!window.jspdf){ toast('El generador de PDF no cargó. Revisa la conexión y abre la página otra vez.'); return; }
   if (!downloads){ toast('No se pudo bajar el archivo.'); return; }
   toast('Preparando el PDF…');
@@ -699,7 +719,7 @@ const A = {
   diag: (d, b, e) => { const r = $('#diagSvg').getBoundingClientRect(); cur.marcas.push({x: Math.round((e.clientX - r.left) / r.width * DW), y: Math.round((e.clientY - r.top) / r.height * DH), t: tool}); renderDiag(); changed(); },
   undo: () => { cur.marcas.pop(); renderDiag(); changed(); },
   clearMarks: () => { cur.marcas = []; renderDiag(); changed(); },
-  ivu: () => { const t = totals(cur); cur.tax = t.sub ? (Math.round(t.sub * SHOP.ivu) / 100).toFixed(2) : ''; const el = document.querySelector('[data-k="tax"]'); el.value = cur.tax ? fmtN(num(cur.tax)) : ''; updateTotals(); changed(); },
+  ivu: () => { cur.taxAuto = !cur.taxAuto || !cur.tax; cur.tax = cur.taxAuto ? calcTax(cur) : ''; toast(cur.taxAuto ? `Tax ${SHOP.ivu}% calculado. Se ajusta solo si cambias los cargos.` : 'Tax quitado'); renderCosts(); const el = document.querySelector('[data-k="tax"]'); el.value = cur.tax ? fmtN(num(cur.tax)) : ''; updateTotals(); changed(); },
 };
 
 document.addEventListener('click', e => {
@@ -716,7 +736,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'qList'){ $('#listBody').innerHTML = lista(el.value); return; }
-  if (el.dataset.k){ cur[el.dataset.k] = el.value; if (el.dataset.k === 'tax') updateTotals(); changed(); return; }
+  if (el.dataset.k){ cur[el.dataset.k] = el.value; if (el.dataset.k === 'tax'){ cur.taxAuto = false; updateTotals(); } changed(); return; }
   if (el.dataset.cargo){ cur.cargos[el.dataset.cargo] = el.value; updateTotals(); changed(); return; }
 });
 document.addEventListener('change', async e => {
@@ -740,7 +760,7 @@ document.addEventListener('submit', async e => {
 });
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (el.dataset && (el.dataset.cargo || el.dataset.k === 'tax') && el.value.trim()){ const v = num(el.value); el.value = v ? fmtN(v) : ''; }
+  if (el.dataset && (el.dataset.cargo || el.dataset.k === 'tax') && el.value.trim()){ const r = parseMoney(el.value); if (r.ok) el.value = r.v ? fmtN(r.v) : ''; else toast('Ese número no se entiende. Escríbelo así: 1261.33'); }
 });
 window.addEventListener('beforeunload', saveDraft);
 
